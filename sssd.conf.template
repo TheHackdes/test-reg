@@ -1,0 +1,14 @@
+[sssd]
+services = nss, pam
+domains = LDAP
+
+[domain/LDAP]
+id_provider = ldap
+auth_provider = ldap
+ldap_uri = ${LDAP_URI}
+ldap_search_base = ${LDAP_BASE_DN}
+ldap_default_bind_dn = ${LDAP_BIND_DN}
+ldap_default_authtok = ${LDAP_BIND_PASSWORD}
+ldap_schema = ${LDAP_SCHEMA}
+cache_credentials = True
+enumerate = False
