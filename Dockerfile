@@ -1,28 +1,39 @@
-FROM rockylinux:8
+# Simple Rocky Linux 8 image, inspired by kasmtech/workspaces-core-images
+ARG BASE_IMAGE=rockylinux:8
+FROM ${BASE_IMAGE}
 
-LABEL maintainer="gdenis"
+LABEL maintainer="guillaume.denis1997@gmail.com"
+LABEL org.opencontainers.image.title="rocky8-core"
+LABEL org.opencontainers.image.description="Simple Rocky Linux 8 base image"
 
-# ---- Variables LDAP a personnaliser ----
-# Surchargeables au "docker run -e VAR=valeur" ou dans le Docker Run Config de Kasm
-ENV LDAP_URI="ldap://ldap.forumsys.com:389" \
-    LDAP_BASE_DN="dc=example,dc=com" \
-    LDAP_BIND_DN="cn=read-only-admin,dc=example,dc=com" \
-    LDAP_BIND_PASSWORD="password" \
-    LDAP_SCHEMA="rfc2307"
+ENV LANG=en_US.UTF-8 \
+    LANGUAGE=en_US:en \
+    LC_ALL=en_US.UTF-8 \
+    TZ=UTC
 
-RUN dnf install -y \
-        sssd \
-        sssd-ldap \
-        authselect \
-        gettext \
-        openssh-clients \
+# Common tools
+RUN dnf -y update \
+    && dnf -y install \
+        bash \
+        ca-certificates \
+        curl \
+        glibc-langpack-en \
+        procps-ng \
         sudo \
-    && authselect select sssd --force \
-    && dnf clean all
+        tar \
+        vim-minimal \
+        which \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf
 
-COPY sssd.conf.template /etc/sssd/sssd.conf.template
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# Non-root user (kasm-user, uid 1000)
+RUN useradd -m -u 1000 -s /bin/bash kasm-user
 
-ENTRYPOINT ["/entrypoint.sh"]
-CMD ["/bin/bash"]
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+USER 1000
+WORKDIR /home/kasm-user
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["bash"]

@@ -34,6 +34,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
+            type=raw,value=rocky8
             type=ref,event=branch
             type=ref,event=tag
             type=sha
@@ -46,5 +47,7 @@ jobs:
         with:
           context: .
           push: true
+          build-args: |
+            BASE_IMAGE=rockylinux:8
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
