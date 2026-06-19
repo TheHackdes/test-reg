@@ -132,13 +132,23 @@ else
 fi
 
 # --- Resolve the session user ---
-# Kasm Workspaces injects the authenticated username per session (KASM_USER).
-# Fall back to the local kasm-user so the image still boots without LDAP.
+# Kasm Workspaces injects the authenticated username per session (KASM_USER,
+# typically set to the {username} template in the workspace Docker Run Config
+# Override). Fall back to the local kasm-user so the image still boots without
+# LDAP.
 SESSION_USER="${KASM_USER:-${VNC_USER:-kasm-user}}"
 
+# Kasm's {username} can carry a realm/domain suffix (e.g. "jdoe@example.com")
+# while the LDAP account is just "jdoe". If the full name doesn't resolve, retry
+# with the bare local-part before giving up.
 if ! id "$SESSION_USER" >/dev/null 2>&1; then
-    log "Session user '${SESSION_USER}' not found (LDAP unreachable? bad username?)" ERROR
-    exit 1
+    if [[ "$SESSION_USER" == *@* ]] && id "${SESSION_USER%%@*}" >/dev/null 2>&1; then
+        log "Session user '${SESSION_USER}' not found; using bare username '${SESSION_USER%%@*}'" WARNING
+        SESSION_USER="${SESSION_USER%%@*}"
+    else
+        log "Session user '${SESSION_USER}' not found (LDAP unreachable? bad username?)" ERROR
+        exit 1
+    fi
 fi
 
 SESSION_UID=$(id -u "$SESSION_USER")
@@ -157,8 +167,18 @@ else
 fi
 
 # --- Drop privileges and hand off to the VNC startup as the session user ---
-log "Starting session as ${SESSION_USER} (uid ${SESSION_UID})"
+# KasmVNC reads the system TLS cert (/etc/pki/tls/private/kasmvnc.pem), readable
+# only by the "kasmvnc-cert" group. The static kasm-user is in that group, but a
+# dynamic LDAP user is not, so KasmVNC bails with "certificate isn't readable".
+# Fold the cert group into the session user's supplementary groups at drop time
+# (equivalent to `usermod -aG kasmvnc-cert`, but works for non-local users).
+SUP_GROUPS=$(id -G "$SESSION_USER" 2>/dev/null | tr ' ' ',')
+CERT_GID=$(getent group kasmvnc-cert | cut -d: -f3)
+[[ -n "$CERT_GID" ]] && SUP_GROUPS="${SUP_GROUPS:+${SUP_GROUPS},}${CERT_GID}"
+
+log "Starting session as ${SESSION_USER} (uid ${SESSION_UID}, groups ${SUP_GROUPS})"
 cd "$SESSION_HOME"
-exec setpriv --reuid "$SESSION_UID" --regid "$SESSION_GID" --init-groups \
+exec setpriv --reuid "$SESSION_UID" --regid "$SESSION_GID" \
+    ${SUP_GROUPS:+--groups "$SUP_GROUPS"} \
     env HOME="$SESSION_HOME" USER="$SESSION_USER" LOGNAME="$SESSION_USER" \
     /dockerstartup/vnc_startup.sh "$@"
