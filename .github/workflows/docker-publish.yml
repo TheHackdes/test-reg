@@ -17,6 +17,17 @@ jobs:
       contents: read
       packages: write
 
+    # One entry per image. Build context is always the repo root so the
+    # shared scripts/ tree is reachable from every Dockerfile.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: rocky8-kasmvnc
+            dockerfile: rocky8-kasmvnc.Dockerfile
+            tag: rocky8
+            base_image: rockylinux:8
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,8 +44,11 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Per-image tag prefix keeps multiple images from colliding.
+          flavor: |
+            prefix=${{ matrix.tag }}-,onlatest=false
           tags: |
-            type=raw,value=rocky8
+            type=raw,value=${{ matrix.tag }},prefix=
             type=ref,event=branch
             type=ref,event=tag
             type=sha
@@ -46,8 +60,9 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: ${{ matrix.dockerfile }}
           push: true
           build-args: |
-            BASE_IMAGE=rockylinux:8
+            BASE_IMAGE=${{ matrix.base_image }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
