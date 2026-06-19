@@ -37,7 +37,7 @@ Override*).
     "LDAP_ENABLED": "true",
     "LDAP_URI": "ldap://10.32.14.211",
     "LDAP_SEARCH_BASE": "dc=mondomaine,dc=local",
-    "LDAP_SCHEMA": "rfc2307",
+    "LDAP_SCHEMA": "rfc2307bis",
     "LDAP_TLS_REQCERT": "never",
     "LDAP_HOME_DIR_TEMPLATE": "/home/%u",
     "LDAP_DEFAULT_SHELL": "/bin/bash"
@@ -64,7 +64,7 @@ Toutes définissables dans `environment`. Valeurs par défaut dans
 
 | Variable | Défaut | Description |
 |----------|--------|-------------|
-| `LDAP_SCHEMA` | `rfc2307` | `rfc2307` (OpenLDAP posix), `rfc2307bis`, ou `ad` (Active Directory). |
+| `LDAP_SCHEMA` | `rfc2307bis` | Attribut d'appartenance aux groupes lu par SSSD : `rfc2307` = `memberUid` (username) ; `rfc2307bis` = `member` (DN complet, + groupes imbriqués) ; `ad` = Active Directory. Si `id` ne voit pas les groupes où vous êtes en `member`, utilisez `rfc2307bis`. |
 | `LDAP_DEFAULT_BIND_DN` | *(vide)* | Compte de service pour le bind. Vide = bind anonyme. |
 | `LDAP_DEFAULT_AUTHTOK` | *(vide)* | Mot de passe du compte de service. |
 | `LDAP_TLS_REQCERT` | `never` | `demand` / `allow` / `never`. |
@@ -134,6 +134,7 @@ docker exec <conteneur> ps -o uid,user,cmd -C Xvnc
 | `Session user '...' not found` | Le nom du portail ne correspond à aucun compte LDAP | Vérifier le mapping username Kasm ↔ attribut LDAP. Le suffixe `@domaine` est strippé automatiquement en repli. |
 | `certificate isn't readable` (kasmvnc.pem) | Utilisateur LDAP absent du groupe `kasmvnc-cert` | Géré automatiquement par l'entrypoint (groupe ajouté au drop). Rebuild l'image si l'erreur persiste. |
 | `no shared cipher` (handshake TLS) | KasmVNC pointé sur un PEM sans clé privée | Utiliser le certificat système (cert + clé). Ne pas passer `-cert` vers un PEM cert-seul. |
+| `id` ne montre pas tous les groupes | `LDAP_SCHEMA=rfc2307` ne lit que `memberUid` ; les groupes en `member` (DN) sont ignorés | Passer `LDAP_SCHEMA=rfc2307bis`. |
 | `xfsettingsd: No such file or directory` | Paquet XFCE manquant | Cosmétique. Ajouter `xfce4-settings` dans `install-desktop.sh` si besoin. |
 
 ---
