@@ -32,12 +32,14 @@ RUN chmod +x /tmp/build/*.sh \
     && /tmp/build/install-base.sh \
     && /tmp/build/install-desktop.sh \
     && /tmp/build/install-kasmvnc.sh \
+    && /tmp/build/install-ldap.sh \
     && /tmp/build/setup-user.sh \
     && /tmp/build/cleanup.sh \
     && rm -rf /tmp/build
 
-# --- Runtime scripts ---
+# --- Runtime scripts + shared config ---
 COPY scripts/startup/ ${STARTUPDIR}/
+COPY env/ ${STARTUPDIR}/env/
 RUN chmod +x ${STARTUPDIR}/*.sh \
     && chown -R 1000:0 ${STARTUPDIR}
 
@@ -53,15 +55,20 @@ ENV VNC_PORT=5901 \
     MAX_FRAME_RATE=24 \
     KASMVNC_AUTO_RECOVER=true \
     START_XFCE4=1 \
-    VNCOPTIONS="-PreferBandwidth -DynamicQualityMin=4 -DynamicQualityMax=7 -publicIP 127.0.0.1"
+    VNCOPTIONS="-PreferBandwidth -DynamicQualityMin=4 -DynamicQualityMax=7 -publicIP 127.0.0.1" \
+    ENV_FILE=/dockerstartup/env/global.env
 
 EXPOSE 5901 6901
 
-# Kasm Workspaces launches the container as the image user (uid 1000), not root.
-# Running as root + runuser fails under Kasm ("may not be used by non-root users").
-USER 1000
+# LDAP/SSSD requires root: sssd is a privileged daemon and the per-session home
+# dir is created under /home before we know the user. entrypoint.sh runs as root
+# only for that setup, then drops to the authenticated session user (setpriv)
+# before launching KasmVNC/XFCE -- so the desktop itself stays unprivileged.
+# NOTE: set the Kasm Workspaces run-config user to root for this image.
+USER root
 WORKDIR /home/kasm-user
 
-# vnc_startup.sh starts KasmVNC + XFCE; "--wait" keeps the session alive.
-ENTRYPOINT ["/dockerstartup/vnc_startup.sh"]
+# entrypoint.sh: SSSD/LDAP + user resolution + home provisioning, then execs
+# vnc_startup.sh (KasmVNC + XFCE) as the session user. "--wait" keeps it alive.
+ENTRYPOINT ["/dockerstartup/entrypoint.sh"]
 CMD ["--wait"]
